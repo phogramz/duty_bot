@@ -92,7 +92,7 @@ async def process_date_select(callback: CallbackQuery):
         await callback.message.edit_text(
             f"✅ Вы выбрали {format_date_long(selected_date)}.\n"
             f"Подтверждаете бронирование?",
-            reply_markup=kb.get_booking_confirmation_keyboard(f"{year}-{month:02d}-{day:02d}")
+            reply_markup=kb.get_booking_confirmation_keyboard(f"{year}-{int(month):02d}-{int(day):02d}")
         )
 
     await callback.answer()
