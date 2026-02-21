@@ -6,7 +6,7 @@ from datetime import date
 async def init_db():
     """Создает таблицы, если их нет"""
     async with aiosqlite.connect(config.DATABASE_PATH) as db:
-        # Таблица пользователей
+        # Таблица пользователей (без изменений)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,7 +17,7 @@ async def init_db():
             )
         ''')
 
-        # Таблица броней
+        # Таблица броней - УБИРАЕМ UNIQUE(booking_date)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS bookings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,8 +26,7 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 reminder_3day_sent BOOLEAN DEFAULT 0,
                 reminder_morning_sent BOOLEAN DEFAULT 0,
-                FOREIGN KEY (user_id) REFERENCES users (id),
-                UNIQUE(booking_date)  -- один день - одно дежурство
+                FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
 
@@ -53,7 +52,7 @@ async def get_user(telegram_id: int):
 
 
 async def get_bookings_by_date(date: date):
-    """Получает бронь на конкретную дату"""
+    """Получает ВСЕХ дежурных на конкретную дату"""
     async with aiosqlite.connect(config.DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute('''
@@ -62,11 +61,17 @@ async def get_bookings_by_date(date: date):
             JOIN users u ON b.user_id = u.id
             WHERE b.booking_date = ?
         ''', (date.isoformat(),)) as cursor:
-            return await cursor.fetchone()
+            return await cursor.fetchall()  # теперь возвращает список, а не одного
 
 
-async def create_booking(user_id: int, booking_date: date):
-    """Создает новую бронь"""
+async def create_booking(user_id: int, booking_date: date) -> tuple[bool, str]:
+    """Создает новую бронь с проверкой лимита"""
+    # Проверяем, сколько уже записалось
+    current_count = await get_bookings_count_for_date(booking_date)
+
+    if current_count >= 2:
+        return False, "Достигнут лимит (2 человека)"
+
     async with aiosqlite.connect(config.DATABASE_PATH) as db:
         try:
             await db.execute('''
@@ -74,10 +79,9 @@ async def create_booking(user_id: int, booking_date: date):
                 VALUES (?, ?)
             ''', (user_id, booking_date.isoformat()))
             await db.commit()
-            return True
-        except aiosqlite.IntegrityError:
-            # День уже занят
-            return False
+            return True, f"Вы {current_count + 1}-й дежурный"
+        except Exception as e:
+            return False, f"Ошибка: {e}"
 
 
 async def get_user_bookings(telegram_id: int):
@@ -122,3 +126,15 @@ async def get_all_bookings():
             ORDER BY b.booking_date
         ''') as cursor:
             return await cursor.fetchall()
+
+
+async def get_bookings_count_for_date(date: date) -> int:
+    """Сколько человек уже записалось на конкретную дату"""
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        async with db.execute('''
+            SELECT COUNT(*) as count 
+            FROM bookings 
+            WHERE booking_date = ?
+        ''', (date.isoformat(),)) as cursor:
+            result = await cursor.fetchone()
+            return result[0] if result else 0

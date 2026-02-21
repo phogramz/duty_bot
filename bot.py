@@ -76,23 +76,32 @@ async def process_calendar_nav(callback: CallbackQuery):
 async def process_date_select(callback: CallbackQuery):
     """Пользователь выбрал дату в календаре"""
     _, year, month, day = callback.data.split('_')
-    selected_date = date(int(year), int(month), int(day))
+    year, month, day = int(year), int(month), int(day)
+    selected_date = date(year, month, day)
 
-    # Проверяем, свободен ли день
-    existing = await database.get_bookings_by_date(selected_date)
+    # Получаем ВСЕХ дежурных на эту дату
+    existing_bookings = await database.get_bookings_by_date(selected_date)
+    current_count = len(existing_bookings)
 
-    if existing:
+    if current_count >= 2:
         await callback.message.edit_text(
-            f"❌ Этот день ({format_date_long(selected_date)}) уже занят пользователем {existing['full_name']}.\n"
+            f"❌ На {format_date_long(selected_date)} уже записалось 2 человека.\n"
             f"Выберите другой день.",
             reply_markup=kb.get_back_keyboard()
         )
+    elif current_count == 1:
+        # Есть один дежурный, можно вторым
+        await callback.message.edit_text(
+            f"✅ На {format_date_long(selected_date)} уже записался {existing_bookings[0]['full_name']}.\n"
+            f"Вы можете быть вторым дежурным. Подтверждаете?",
+            reply_markup=kb.get_booking_confirmation_keyboard(f"{year}-{month:02d}-{day:02d}")
+        )
     else:
-        # Спрашиваем подтверждение
+        # Свободно
         await callback.message.edit_text(
             f"✅ Вы выбрали {format_date_long(selected_date)}.\n"
             f"Подтверждаете бронирование?",
-            reply_markup=kb.get_booking_confirmation_keyboard(f"{year}-{int(month):02d}-{int(day):02d}")
+            reply_markup=kb.get_booking_confirmation_keyboard(f"{year}-{month:02d}-{day:02d}")
         )
 
     await callback.answer()
@@ -105,20 +114,34 @@ async def process_confirm(callback: CallbackQuery):
     date_str = callback.data.replace("confirm_", "")
     booking_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
+    # Повторно проверяем лимит (на случай, если кто-то успел записаться)
+    current_count = await database.get_bookings_count_for_date(booking_date)
+
+    if current_count >= 2:
+        await callback.message.edit_text(
+            f"❌ К сожалению, пока вы думали, на {format_date_long(booking_date)} записалось 2 человека.\n"
+            f"Попробуйте выбрать другой день.",
+            reply_markup=kb.get_back_keyboard()
+        )
+        await callback.answer()
+        return
+
     # Создаем бронь
     user = await database.get_user(callback.from_user.id)
-    success = await database.create_booking(user['id'], booking_date)
+    success, message = await database.create_booking(user['id'], booking_date)
 
     if success:
+        new_count = current_count + 1
         await callback.message.edit_text(
-            f"✅ Дежурство на {format_date_long(booking_date)} успешно забронировано!\n"
+            f"✅ Вы записаны на {format_date_long(booking_date)}!\n"
+            f"Вы {new_count}-й дежурный на этот день.\n"
             f"Я напомню вам за 3 дня и утром в день дежурства.",
             reply_markup=kb.get_back_keyboard()
         )
     else:
         await callback.message.edit_text(
-            f"❌ К сожалению, этот день уже кто-то забронировал.\n"
-            f"Попробуйте выбрать другой день.",
+            f"❌ Не удалось записаться: {message}\n"
+            f"Попробуйте другой день.",
             reply_markup=kb.get_back_keyboard()
         )
 
@@ -220,16 +243,29 @@ async def process_all_bookings(callback: CallbackQuery):
         await callback.answer()
         return
 
-    # Группируем по месяцам
-    bookings_by_month = {}
+    # Группируем по датам и собираем имена
+    bookings_by_date = {}
     for booking in all_bookings:
         date_obj = datetime.strptime(booking['booking_date'], '%Y-%m-%d').date()
-        month_key = f"{get_month_name(date_obj.month)} {date_obj.year}"
+        date_key = date_obj.isoformat()
+        if date_key not in bookings_by_date:
+            bookings_by_date[date_key] = {
+                'date': date_obj,
+                'names': []
+            }
+        bookings_by_date[date_key]['names'].append(booking['full_name'])
+
+    # Группируем по месяцам для вывода
+    bookings_by_month = {}
+    for date_key, data in bookings_by_date.items():
+        month_key = f"{get_month_name(data['date'].month)} {data['date'].year}"
         if month_key not in bookings_by_month:
             bookings_by_month[month_key] = []
-        bookings_by_month[month_key].append(
-            f"{format_date_short(date_obj)} — {booking['full_name']}"
-        )
+
+        # Формируем строку: "04ср — Имя1 и Имя2"
+        date_str = format_date_short(data['date'])
+        names_str = " и ".join(data['names'])
+        bookings_by_month[month_key].append(f"{date_str} — {names_str}")
 
     # Формируем сообщение
     text = "👥 **Все дежурства:**\n\n"

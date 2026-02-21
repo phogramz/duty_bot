@@ -21,14 +21,16 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
-    """Календарь на указанный месяц"""
-    # Добавь эти строки в начало функции
+async def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
+    """Календарь на указанный месяц с отображением занятости"""
+    # Импортируем функцию из database
+    from database import get_bookings_count_for_date
+
+    builder = InlineKeyboardBuilder()
     days_ru = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
     allowed_weekdays = [2, 5, 6]  # ср, сб, вс
-    builder = InlineKeyboardBuilder()
 
-    # Заголовок с месяцем и навигацией
+    # Заголовок с навигацией (как было)
     month_name = get_month_name(month)
     prev_month = month - 1 if month > 1 else 12
     prev_year = year if month > 1 else year - 1
@@ -42,17 +44,14 @@ def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
         width=3
     )
 
-    # Заголовки дней недели (пн, вт, ср, чт, пт, сб, вс)
-    weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-    builder.row(*[InlineKeyboardButton(text=d, callback_data="ignore") for d in weekdays], width=7)
+    # Заголовки дней недели
+    builder.row(
+        *[InlineKeyboardButton(text=d, callback_data="ignore") for d in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']],
+        width=7)
 
-    # Получаем доступные дни для бронирования
-    available_days = get_available_days(year, month)
-    available_days_set = {d.day for d in available_days}
-
-    # Определяем первый день месяца и заполняем пустые ячейки
+    # Определяем первый день месяца
     first_day = date(year, month, 1)
-    start_weekday = first_day.weekday()  # 0 = понедельник
+    start_weekday = first_day.weekday()
 
     # Пустые ячейки перед первым днем
     week = []
@@ -65,33 +64,37 @@ def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
     else:
         last_day = (date(year, month + 1, 1) - timedelta(days=1)).day
 
-    # Замени этот блок (примерно строки 50-70)
     for day in range(1, last_day + 1):
         current_date = date(year, month, day)
+
         if current_date.weekday() in allowed_weekdays:
-            # Доступный день - показываем число и день недели
-            btn_text = f"{day:02d}{days_ru[current_date.weekday()]}"
-            callback = f"select_{year}_{month}_{day}"
+            # Проверяем, сколько уже записалось
+            count = await get_bookings_count_for_date(current_date)
+
+            if count == 0:
+                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}"
+                callback = f"select_{year}_{month}_{day}"
+            elif count == 1:
+                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}"  # можно добавить символ
+                callback = f"select_{year}_{month}_{day}"
+            else:  # count == 2
+                btn_text = f"❌{day:02d}"  # или другой индикатор, что мест нет
+                callback = "ignore"
         else:
-            # Недоступный день - показываем крестик
             btn_text = "❌"
             callback = "ignore"
 
         week.append(InlineKeyboardButton(text=btn_text, callback_data=callback))
 
-        # Если неделя заполнена (7 дней), добавляем строку
         if len(week) == 7:
             builder.row(*week, width=7)
             week = []
 
-    # Добавляем оставшиеся дни (если есть)
     if week:
-        # Дозаполняем пустыми кнопками до конца недели
         while len(week) < 7:
             week.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
         builder.row(*week, width=7)
 
-    # Кнопка "Назад в меню"
     builder.row(InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"), width=1)
 
     return builder.as_markup()
