@@ -66,7 +66,6 @@ async def get_bookings_by_date(date: date):
 
 async def create_booking(user_id: int, booking_date: date) -> tuple[bool, str]:
     """Создает новую бронь с проверкой лимита"""
-    # Проверяем, сколько уже записалось
     current_count = await get_bookings_count_for_date(booking_date)
 
     if current_count >= 2:
@@ -74,9 +73,12 @@ async def create_booking(user_id: int, booking_date: date) -> tuple[bool, str]:
 
     async with aiosqlite.connect(config.DATABASE_PATH) as db:
         try:
+            # Явно указываем, что уведомления еще не отправлены
             await db.execute('''
-                INSERT INTO bookings (user_id, booking_date)
-                VALUES (?, ?)
+                INSERT INTO bookings (
+                    user_id, booking_date, 
+                    reminder_3day_sent, reminder_morning_sent
+                ) VALUES (?, ?, 0, 0)
             ''', (user_id, booking_date.isoformat()))
             await db.commit()
             return True, f"Вы {current_count + 1}-й дежурный"

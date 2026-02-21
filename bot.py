@@ -7,6 +7,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from reminder import setup_reminders
 
 import config
 import database
@@ -313,7 +314,12 @@ async def process_ignore(callback: CallbackQuery):
 # Запуск бота
 async def main():
     await database.init_db()
+    # Настраиваем и запускаем планировщик уведомлений
+    scheduler = setup_reminders(bot)
+    # Запускаем бота
     await dp.start_polling(bot)
+    # При остановке бота останавливаем и планировщик
+    scheduler.shutdown()
 
 
 if __name__ == '__main__':
