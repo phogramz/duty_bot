@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from datetime import date, datetime
+from datetime import date, timedelta
 import calendar
 from utils import get_available_days, format_date_short, get_month_name
 
