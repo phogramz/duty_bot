@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 import calendar
 from utils import get_available_days, format_date_short, get_month_name
 
@@ -23,6 +23,9 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
 
 def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
     """Календарь на указанный месяц"""
+    # Добавь эти строки в начало функции
+    days_ru = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
+    allowed_weekdays = [2, 5, 6]  # ср, сб, вс
     builder = InlineKeyboardBuilder()
 
     # Заголовок с месяцем и навигацией
@@ -62,14 +65,16 @@ def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
     else:
         last_day = (date(year, month + 1, 1) - timedelta(days=1)).day
 
+    # Замени этот блок (примерно строки 50-70)
     for day in range(1, last_day + 1):
-        if day in available_days_set:
-            # Доступный день
-            btn_text = f"{day:02d}{['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'][first_day.weekday()]}"
+        current_date = date(year, month, day)
+        if current_date.weekday() in allowed_weekdays:
+            # Доступный день - показываем число и день недели
+            btn_text = f"{day:02d}{days_ru[current_date.weekday()]}"
             callback = f"select_{year}_{month}_{day}"
         else:
-            # Недоступный день
-            btn_text = f"{day:02d}"
+            # Недоступный день - показываем крестик
+            btn_text = "❌"
             callback = "ignore"
 
         week.append(InlineKeyboardButton(text=btn_text, callback_data=callback))

@@ -6,22 +6,20 @@ import calendar
 def get_available_days(year: int, month: int) -> List[date]:
     """Возвращает список доступных дней для дежурства в указанном месяце"""
     # Доступные дни недели: среда (2), суббота (5), воскресенье (6)
-    allowed_weekdays = [2, 5, 6]
+    allowed_weekdays = [2, 5, 6]  # 0=пн, 1=вт, 2=ср, 3=чт, 4=пт, 5=сб, 6=вс
 
-    # Первый и последний день месяца
-    first_day = date(year, month, 1)
+    # Определяем последний день месяца
     if month == 12:
-        last_day = date(year + 1, 1, 1) - timedelta(days=1)
+        last_day = 31
     else:
-        last_day = date(year, month + 1, 1) - timedelta(days=1)
+        last_day = (date(year, month + 1, 1) - timedelta(days=1)).day
 
-    # Генерируем все подходящие дни
+    # Генерируем все дни месяца и проверяем каждый
     available = []
-    current = first_day
-    while current <= last_day:
-        if current.weekday() in allowed_weekdays:
-            available.append(current)
-        current += timedelta(days=1)
+    for day in range(1, last_day + 1):
+        current_date = date(year, month, day)
+        if current_date.weekday() in allowed_weekdays:
+            available.append(current_date)
 
     return available
 
