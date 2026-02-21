@@ -50,3 +50,75 @@ async def get_user(telegram_id: int):
         db.row_factory = aiosqlite.Row  # чтобы получать записи как словари
         async with db.execute('SELECT * FROM users WHERE telegram_id = ?', (telegram_id,)) as cursor:
             return await cursor.fetchone()
+
+
+async def get_bookings_by_date(date: date):
+    """Получает бронь на конкретную дату"""
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT b.*, u.full_name, u.telegram_id 
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            WHERE b.booking_date = ?
+        ''', (date.isoformat(),)) as cursor:
+            return await cursor.fetchone()
+
+
+async def create_booking(user_id: int, booking_date: date):
+    """Создает новую бронь"""
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        try:
+            await db.execute('''
+                INSERT INTO bookings (user_id, booking_date)
+                VALUES (?, ?)
+            ''', (user_id, booking_date.isoformat()))
+            await db.commit()
+            return True
+        except aiosqlite.IntegrityError:
+            # День уже занят
+            return False
+
+
+async def get_user_bookings(telegram_id: int):
+    """Получает все брони пользователя"""
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT b.*, u.full_name 
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            WHERE u.telegram_id = ?
+            ORDER BY b.booking_date
+        ''', (telegram_id,)) as cursor:
+            return await cursor.fetchall()
+
+
+async def cancel_booking(booking_id: int, telegram_id: int):
+    """Отменяет бронь (только если это бронь пользователя)"""
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        # Проверяем, что бронь принадлежит пользователю
+        async with db.execute('''
+            SELECT b.id FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            WHERE b.id = ? AND u.telegram_id = ?
+        ''', (booking_id, telegram_id)) as cursor:
+            if not await cursor.fetchone():
+                return False
+
+        await db.execute('DELETE FROM bookings WHERE id = ?', (booking_id,))
+        await db.commit()
+        return True
+
+
+async def get_all_bookings():
+    """Получает все брони для общего календаря"""
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT b.booking_date, u.full_name
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            ORDER BY b.booking_date
+        ''') as cursor:
+            return await cursor.fetchall()
