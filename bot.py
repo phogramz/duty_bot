@@ -53,9 +53,9 @@ async def process_book(callback: CallbackQuery):
     """Показывает календарь на текущий месяц"""
     today = date.today()
     await callback.message.edit_text(
-        f"📅 Выберите день для дежурства:\n"
-        f"Доступны только среда, суббота и воскресенье.",
-        reply_markup=kb.get_calendar_keyboard(today.year, today.month)
+        "📅 Выберите день для дежурства:\n"
+        "Доступны только среда, суббота и воскресенье.",
+        reply_markup=await kb.get_calendar_keyboard(today.year, today.month)  # добавили await
     )
     await callback.answer()
 
@@ -66,7 +66,7 @@ async def process_calendar_nav(callback: CallbackQuery):
     """Переключение между месяцами"""
     _, year, month = callback.data.split('_')
     await callback.message.edit_reply_markup(
-        reply_markup=kb.get_calendar_keyboard(int(year), int(month))
+        reply_markup=await kb.get_calendar_keyboard(int(year), int(month))  # добавили await
     )
     await callback.answer()
 
