@@ -305,7 +305,7 @@ async def process_all_bookings(callback: CallbackQuery):
 # Обработка кнопки "Назад"
 @dp.callback_query(F.data == "back_to_menu")
 async def process_back_to_menu(callback: CallbackQuery):
-    """Возврат в главное меню"""
+    """Возврат в главное меню."""
     await callback.message.edit_text(
         "Главное меню:",
         reply_markup=kb.get_main_keyboard()
