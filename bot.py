@@ -203,7 +203,7 @@ async def process_cancel_menu(callback: CallbackQuery):
 
     await callback.message.edit_text(
         "❌ Выберите дежурство для отмены:",
-        reply_markup=kb.get_cancel_selection_keyboard(bookings)
+        reply_markup=await kb.get_cancel_selection_keyboard(bookings)  # ДОБАВЬ AWAIT
     )
     await callback.answer()
 
@@ -299,7 +299,7 @@ async def process_back_to_calendar(callback: CallbackQuery):
     today = date.today()
     await callback.message.edit_text(
         "📅 Выберите день для дежурства:",
-        reply_markup=kb.get_calendar_keyboard(today.year, today.month)
+        reply_markup=await kb.get_calendar_keyboard(today.year, today.month)
     )
     await callback.answer()
 
