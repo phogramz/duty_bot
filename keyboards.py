@@ -78,17 +78,17 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
         if current_date.weekday() in allowed_weekdays:
             count = bookings_data.get(date_str, 0)
 
-            # Формируем текст: "число" и количество человек
+            # ОЧЕНЬ КОРОТКИЙ формат: просто число и эмодзи
             if count == 0:
-                btn_text = f"{day:02d}\n0👤"  # 04\n0👤
+                btn_text = f"{day}\n⬜"  # белый квадрат
             elif count == 1:
-                btn_text = f"{day:02d}\n1👤"  # 04\n1👤
-            else:  # count == 2
-                btn_text = f"{day:02d}\n2👤"  # 04\n2👤
+                btn_text = f"{day}\n🟨"  # желтый (1 человек)
+            else:
+                btn_text = f"{day}\n🟥"  # красный (занято)
 
-            # Доступно для бронирования, если меньше 2
             callback = f"select_{year}_{month}_{day}" if count < 2 else "ignore"
         else:
+            # Для недоступных дней - просто точка или пробел
             btn_text = "❌"
             callback = "ignore"
 
