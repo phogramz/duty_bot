@@ -59,23 +59,28 @@ async def cmd_start(message: Message):
 # Обработка кнопки "Забронировать"
 @dp.callback_query(F.data == "book")
 async def process_book(callback: CallbackQuery):
+    """Показывает календарь на текущий месяц"""
     today = date.today()
 
-    # Получаем список дат с бронями
-    booked_dates = await database.get_month_bookings(today.year, today.month)
+    # Загружаем свежие данные о бронях
+    month_bookings = await database.get_month_bookings(today.year, today.month)
 
-    # Считаем, сколько броней на каждую дату
+    # Преобразуем в словарь {дата: количество}
     bookings_count = {}
-    for date_str in booked_dates:
+    for booking in month_bookings:
+        # booking может быть строкой или словарем - проверим
+        if isinstance(booking, dict) or hasattr(booking, '__getitem__'):
+            date_str = booking['booking_date'] if isinstance(booking, dict) else booking[0]
+        else:
+            date_str = booking
         bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
 
     await callback.message.edit_text(
-        "📅 Выберите день для дежурства:\n"
-        "Доступны только среда, суббота и воскресенье.",
+        "📅 Выберите день для дежурства:",
         reply_markup=kb.get_calendar_keyboard(
             today.year,
             today.month,
-            bookings_count  # передаем словарь с количеством
+            bookings_count
         )
     )
     await callback.answer()
@@ -86,8 +91,20 @@ async def process_book(callback: CallbackQuery):
 async def process_calendar_nav(callback: CallbackQuery):
     """Переключение между месяцами"""
     _, year, month = callback.data.split('_')
+    year, month = int(year), int(month)
+
+    # Загружаем данные для нового месяца
+    month_bookings = await database.get_month_bookings(year, month)
+    bookings_count = {}
+    for booking in month_bookings:
+        if isinstance(booking, dict) or hasattr(booking, '__getitem__'):
+            date_str = booking['booking_date'] if isinstance(booking, dict) else booking[0]
+        else:
+            date_str = booking
+        bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
+
     await callback.message.edit_reply_markup(
-        reply_markup=kb.get_calendar_keyboard(int(year), int(month))  # добавили await
+        reply_markup=kb.get_calendar_keyboard(year, month, bookings_count)
     )
     await callback.answer()
 
@@ -135,34 +152,43 @@ async def process_confirm(callback: CallbackQuery):
     date_str = callback.data.replace("confirm_", "")
     booking_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
-    # Повторно проверяем лимит (на случай, если кто-то успел записаться)
+    # Получаем пользователя
+    user = await database.get_user(callback.from_user.id)
+    if not user:
+        await database.add_user(
+            telegram_id=callback.from_user.id,
+            username=callback.from_user.username,
+            full_name=callback.from_user.full_name
+        )
+        user = await database.get_user(callback.from_user.id)
+
+    # Повторно проверяем лимит
     current_count = await database.get_bookings_count_for_date(booking_date)
 
     if current_count >= 2:
         await callback.message.edit_text(
-            f"❌ К сожалению, пока вы думали, на {format_date_long(booking_date)} записалось 2 человека.\n"
-            f"Попробуйте выбрать другой день.",
+            f"❌ К сожалению, пока вы думали, на {format_date_long(booking_date)} записалось 2 человека.",
             reply_markup=kb.get_back_keyboard()
         )
         await callback.answer()
         return
 
     # Создаем бронь
-    user = await database.get_user(callback.from_user.id)
     success, message = await database.create_booking(user['id'], booking_date)
 
     if success:
-        new_count = current_count + 1
+        # Отправляем подтверждение
         await callback.message.edit_text(
             f"✅ Вы записаны на {format_date_long(booking_date)}!\n"
-            f"Вы {new_count}-й дежурный на этот день.\n"
-            f"Я напомню вам за 3 дня и утром в день дежурства.",
+            f"Вы {current_count + 1}-й дежурный на этот день.",
             reply_markup=kb.get_back_keyboard()
         )
+
+        # Нужно обновить календарь, но мы уже ушли с экрана календаря
+        # Пользователь сам вернется в календарь по кнопке "Назад"
     else:
         await callback.message.edit_text(
-            f"❌ Не удалось записаться: {message}\n"
-            f"Попробуйте другой день.",
+            f"❌ Не удалось записаться: {message}",
             reply_markup=kb.get_back_keyboard()
         )
 

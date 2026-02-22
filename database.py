@@ -151,9 +151,9 @@ async def get_month_bookings(year: int, month: int):
         end_date = date(year, month + 1, 1)
 
     async with aiosqlite.connect(config.DATABASE_PATH) as db:
-        db.row_factory = aiosqlite.Row
         async with db.execute('''
             SELECT booking_date FROM bookings 
             WHERE booking_date >= ? AND booking_date < ?
         ''', (start_date.isoformat(), end_date.isoformat())) as cursor:
-            return await cursor.fetchall()
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]  # возвращаем список дат
