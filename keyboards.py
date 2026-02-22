@@ -22,7 +22,7 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> InlineKeyboardMarkup:
-    """Календарь с пустыми ячейками для других дней, но заголовки только для ср,сб,вс"""
+    """Календарь - только ср, сб, вс, 3 колонки, с правильной разбивкой по неделям"""
     builder = InlineKeyboardBuilder()
     allowed_weekdays = [2, 5, 6]  # ср, сб, вс
     weekday_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
@@ -51,7 +51,7 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
         width=3
     )
 
-    # Заголовки дней недели - ТОЛЬКО для ср, сб, вс
+    # Заголовки дней недели - только ср, сб, вс
     builder.row(
         InlineKeyboardButton(text="Ср", callback_data="ignore"),
         InlineKeyboardButton(text="Сб", callback_data="ignore"),
@@ -69,42 +69,40 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
     else:
         last_day = (date(year, month + 1, 1) - timedelta(days=1)).day
 
-    # Создаем сетку 7x(кол-во недель) для всех дней
-    all_days = []
-    current_date = first_day
-    while current_date.month == month:
-        all_days.append({
-            'day': current_date.day,
-            'weekday': current_date.weekday(),
-            'date': current_date,
-            'date_str': current_date.isoformat()
-        })
-        current_date += timedelta(days=1)
+    # Собираем все доступные дни с их позициями в неделе
+    available_days = []
+    for day in range(1, last_day + 1):
+        current_date = date(year, month, day)
+        weekday = current_date.weekday()
+        if weekday in allowed_weekdays:
+            # Определяем номер недели в месяце (1-5)
+            week_num = (day + start_weekday - 1) // 7
+            # Определяем позицию в ряду (0-2 для ср,сб,вс)
+            pos_in_week = [2, 5, 6].index(weekday)  # 0=ср, 1=сб, 2=вс
 
-    # Добавляем пустые дни в начало, если месяц начинается не с понедельника
-    days_grid = []
-    # Добавляем пустые дни до первого дня месяца
-    for _ in range(start_weekday):
-        days_grid.append(None)  # None означает пустую ячейку
+            available_days.append({
+                'day': day,
+                'week_num': week_num,
+                'pos': pos_in_week,
+                'date': current_date,
+                'date_str': current_date.isoformat()
+            })
 
-    # Добавляем все дни месяца
-    days_grid.extend(all_days)
+    # Группируем по неделям
+    weeks = {}
+    for day_info in available_days:
+        week_num = day_info['week_num']
+        if week_num not in weeks:
+            weeks[week_num] = [None, None, None]  # [ср, сб, вс]
+        weeks[week_num][day_info['pos']] = day_info
 
-    # Добавляем пустые дни в конец, чтобы получить полные недели
-    while len(days_grid) % 7 != 0:
-        days_grid.append(None)
-
-    # Разбиваем на недели по 7 дней
-    weeks = [days_grid[i:i + 7] for i in range(0, len(days_grid), 7)]
-
-    # Для каждой недели создаем ряд с ТОЛЬКО доступными днями (ср, сб, вс)
-    for week in weeks:
+    # Сортируем недели и создаем ряды
+    for week_num in sorted(weeks.keys()):
+        week = weeks[week_num]
         row_buttons = []
 
-        # Проходим по каждому дню недели (пн-вс)
-        for day_idx, day_info in enumerate(week):
-            # Проверяем, является ли этот день доступным (ср, сб, вс)
-            if day_info and day_info['weekday'] in allowed_weekdays:
+        for pos, day_info in enumerate(week):
+            if day_info:
                 count = bookings_data.get(day_info['date_str'], 0)
 
                 # Формат: число | количество/2 + эмодзи
@@ -112,41 +110,10 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
                 callback = f"select_{year}_{month}_{day_info['day']}" if count < 2 else "ignore"
                 row_buttons.append(InlineKeyboardButton(text=btn_text, callback_data=callback))
             else:
-                # Для всех остальных дней (включая пустые) - пустая кнопка
+                # Пустая кнопка-заполнитель для сохранения структуры
                 row_buttons.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
 
-        # Добавляем ряд с 7 кнопками (но визуально видны только ср,сб,вс)
-        builder.row(*row_buttons, width=7)
-
-    builder.row(InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"), width=1)
-    return builder.as_markup()
-
-
-def get_booking_confirmation_keyboard(date_str: str) -> InlineKeyboardMarkup:
-    """Подтверждение бронирования"""
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"confirm_{date_str}"),
-        InlineKeyboardButton(text="❌ Отмена", callback_data="back_to_calendar"),
-        width=2
-    )
-    return builder.as_markup()
-
-
-def get_cancel_selection_keyboard(bookings: list) -> InlineKeyboardMarkup:
-    """Клавиатура для выбора брони для отмены"""
-    builder = InlineKeyboardBuilder()
-
-    for booking in bookings:
-        date_obj = datetime.strptime(booking['booking_date'], '%Y-%m-%d').date()
-        btn_text = format_date_short(date_obj)
-        builder.row(
-            InlineKeyboardButton(
-                text=f"❌ {btn_text}",
-                callback_data=f"cancel_{booking['id']}"
-            ),
-            width=1
-        )
+        builder.row(*row_buttons, width=3)
 
     builder.row(InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"), width=1)
     return builder.as_markup()
