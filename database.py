@@ -140,3 +140,20 @@ async def get_bookings_count_for_date(date: date) -> int:
         ''', (date.isoformat(),)) as cursor:
             result = await cursor.fetchone()
             return result[0] if result else 0
+
+
+async def get_month_bookings(year: int, month: int):
+    """Получает все брони за указанный месяц"""
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1)
+    else:
+        end_date = date(year, month + 1, 1)
+
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT booking_date FROM bookings 
+            WHERE booking_date >= ? AND booking_date < ?
+        ''', (start_date.isoformat(), end_date.isoformat())) as cursor:
+            return await cursor.fetchall()

@@ -59,12 +59,24 @@ async def cmd_start(message: Message):
 # Обработка кнопки "Забронировать"
 @dp.callback_query(F.data == "book")
 async def process_book(callback: CallbackQuery):
-    """Показывает календарь на текущий месяц"""
     today = date.today()
+
+    # Получаем список дат с бронями
+    booked_dates = await database.get_month_bookings(today.year, today.month)
+
+    # Считаем, сколько броней на каждую дату
+    bookings_count = {}
+    for date_str in booked_dates:
+        bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
+
     await callback.message.edit_text(
         "📅 Выберите день для дежурства:\n"
         "Доступны только среда, суббота и воскресенье.",
-        reply_markup=await kb.get_calendar_keyboard(today.year, today.month)  # добавили await
+        reply_markup=kb.get_calendar_keyboard(
+            today.year,
+            today.month,
+            bookings_count  # передаем словарь с количеством
+        )
     )
     await callback.answer()
 

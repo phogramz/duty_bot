@@ -21,16 +21,24 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-async def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
-    """Календарь на указанный месяц с отображением занятости"""
-    # Импортируем функцию из database
-    from database import get_bookings_count_for_date
+def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> InlineKeyboardMarkup:
+    """Календарь на указанный месяц (СИНХРОННЫЙ)
 
+    Args:
+        year: год
+        month: месяц
+        bookings_data: словарь {дата: количество_броней}
+                      например {'2024-03-04': 1, '2024-03-08': 2}
+    """
     builder = InlineKeyboardBuilder()
     days_ru = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
     allowed_weekdays = [2, 5, 6]  # ср, сб, вс
 
-    # Заголовок с навигацией (как было)
+    # Если данные не переданы - создаем пустой словарь
+    if bookings_data is None:
+        bookings_data = {}
+
+    # Заголовок с навигацией
     month_name = get_month_name(month)
     prev_month = month - 1 if month > 1 else 12
     prev_year = year if month > 1 else year - 1
@@ -47,7 +55,8 @@ async def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
     # Заголовки дней недели
     builder.row(
         *[InlineKeyboardButton(text=d, callback_data="ignore") for d in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']],
-        width=7)
+        width=7
+    )
 
     # Определяем первый день месяца
     first_day = date(year, month, 1)
@@ -66,19 +75,17 @@ async def get_calendar_keyboard(year: int, month: int) -> InlineKeyboardMarkup:
 
     for day in range(1, last_day + 1):
         current_date = date(year, month, day)
+        date_str = current_date.isoformat()
 
         if current_date.weekday() in allowed_weekdays:
-            # Проверяем, сколько уже записалось
-            count = await get_bookings_count_for_date(current_date)
+            # Получаем количество броней из переданных данных
+            count = bookings_data.get(date_str, 0)
 
-            if count == 0:
+            if count < 2:  # 0 или 1 человек
                 btn_text = f"{day:02d}{days_ru[current_date.weekday()]}"
                 callback = f"select_{year}_{month}_{day}"
-            elif count == 1:
-                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}"  # можно добавить символ
-                callback = f"select_{year}_{month}_{day}"
-            else:  # count == 2
-                btn_text = f"❌{day:02d}"  # или другой индикатор, что мест нет
+            else:  # уже 2 человека
+                btn_text = f"❌{day:02d}"
                 callback = "ignore"
         else:
             btn_text = "❌"
