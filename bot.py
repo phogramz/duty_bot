@@ -323,11 +323,11 @@ async def process_ignore(callback: CallbackQuery):
 async def main():
     await database.init_db()
     # Настраиваем и запускаем планировщик уведомлений
-    scheduler = setup_reminders(bot)
+    # scheduler = setup_reminders(bot) (Для уведомлений нужен сервер на 1Гб RAM - 250руб/мес)
     # Запускаем бота
     await dp.start_polling(bot)
     # При остановке бота останавливаем и планировщик
-    scheduler.shutdown()
+    # scheduler.shutdown()  (Для уведомлений нужен сервер на 1Гб RAM - 250руб/мес)
 
 
 if __name__ == '__main__':
