@@ -31,7 +31,6 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
                       например {'2024-03-04': 1, '2024-03-08': 2}
     """
     builder = InlineKeyboardBuilder()
-    days_ru = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
     allowed_weekdays = [2, 5, 6]  # ср, сб, вс
 
     if bookings_data is None:
@@ -51,7 +50,7 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
         width=3
     )
 
-    # Заголовки дней недели
+    # Заголовки дней недели (короткие)
     builder.row(
         *[InlineKeyboardButton(text=d, callback_data="ignore") for d in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']],
         width=7
@@ -79,13 +78,13 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
         if current_date.weekday() in allowed_weekdays:
             count = bookings_data.get(date_str, 0)
 
-            # Формируем текст с количеством
+            # Формируем текст: "число" и количество человек
             if count == 0:
-                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}\n0/2"
+                btn_text = f"{day:02d}\n0👤"  # 04\n0👤
             elif count == 1:
-                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}\n1/2"
+                btn_text = f"{day:02d}\n1👤"  # 04\n1👤
             else:  # count == 2
-                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}\n2/2"
+                btn_text = f"{day:02d}\n2👤"  # 04\n2👤
 
             # Доступно для бронирования, если меньше 2
             callback = f"select_{year}_{month}_{day}" if count < 2 else "ignore"
