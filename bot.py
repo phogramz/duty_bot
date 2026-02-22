@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, date
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -62,18 +62,23 @@ async def process_book(callback: CallbackQuery):
     """Показывает календарь на текущий месяц"""
     today = date.today()
 
-    # Загружаем свежие данные о бронях
+    # Загружаем СВЕЖИЕ данные о бронях
     month_bookings = await database.get_month_bookings(today.year, today.month)
 
     # Преобразуем в словарь {дата: количество}
     bookings_count = {}
     for booking in month_bookings:
-        # booking может быть строкой или словарем - проверим
-        if isinstance(booking, dict) or hasattr(booking, '__getitem__'):
-            date_str = booking['booking_date'] if isinstance(booking, dict) else booking[0]
-        else:
+        # booking может быть строкой или кортежем
+        if isinstance(booking, (tuple, list)):
+            date_str = booking[0]
+        elif isinstance(booking, str):
             date_str = booking
+        else:
+            date_str = booking['booking_date']  # если Row объект
         bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
+
+    # Логируем для отладки
+    print(f"Загружено броней: {bookings_count}")
 
     await callback.message.edit_text(
         "📅 Выберите день для дежурства:",
@@ -93,14 +98,16 @@ async def process_calendar_nav(callback: CallbackQuery):
     _, year, month = callback.data.split('_')
     year, month = int(year), int(month)
 
-    # Загружаем данные для нового месяца
+    # Загружаем СВЕЖИЕ данные для нового месяца
     month_bookings = await database.get_month_bookings(year, month)
     bookings_count = {}
     for booking in month_bookings:
-        if isinstance(booking, dict) or hasattr(booking, '__getitem__'):
-            date_str = booking['booking_date'] if isinstance(booking, dict) else booking[0]
-        else:
+        if isinstance(booking, (tuple, list)):
+            date_str = booking[0]
+        elif isinstance(booking, str):
             date_str = booking
+        else:
+            date_str = booking['booking_date']
         bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
 
     await callback.message.edit_reply_markup(
@@ -148,7 +155,7 @@ async def process_date_select(callback: CallbackQuery):
 # Обработка подтверждения брони
 @dp.callback_query(F.data.startswith("confirm_"))
 async def process_confirm(callback: CallbackQuery):
-    """Подтверждение бронирования"""
+    """Подтверждение бронирования с автоматическим обновлением календаря"""
     date_str = callback.data.replace("confirm_", "")
     booking_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
@@ -162,13 +169,32 @@ async def process_confirm(callback: CallbackQuery):
         )
         user = await database.get_user(callback.from_user.id)
 
-    # Повторно проверяем лимит
+    # Проверяем лимит
     current_count = await database.get_bookings_count_for_date(booking_date)
 
     if current_count >= 2:
+        # Если уже занято - показываем обновленный календарь
+        today = date.today()
+        month_bookings = await database.get_month_bookings(today.year, today.month)
+        bookings_count = {}
+        for booking in month_bookings:
+            # Обрабатываем разные форматы данных
+            if isinstance(booking, (tuple, list)):
+                date_str = booking[0]
+            elif isinstance(booking, str):
+                date_str = booking
+            else:
+                date_str = booking['booking_date']
+            bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
+
         await callback.message.edit_text(
-            f"❌ К сожалению, пока вы думали, на {format_date_long(booking_date)} записалось 2 человека.",
-            reply_markup=kb.get_back_keyboard()
+            f"❌ На {format_date_long(booking_date)} уже записалось 2 человека.\n\n"
+            f"📅 Актуальный календарь:",
+            reply_markup=kb.get_calendar_keyboard(
+                today.year,
+                today.month,
+                bookings_count
+            )
         )
         await callback.answer()
         return
@@ -177,19 +203,52 @@ async def process_confirm(callback: CallbackQuery):
     success, message = await database.create_booking(user['id'], booking_date)
 
     if success:
-        # Отправляем подтверждение
+        # Загружаем обновленные данные для календаря
+        today = date.today()
+        month_bookings = await database.get_month_bookings(today.year, today.month)
+        bookings_count = {}
+        for booking in month_bookings:
+            if isinstance(booking, (tuple, list)):
+                date_str = booking[0]
+            elif isinstance(booking, str):
+                date_str = booking
+            else:
+                date_str = booking['booking_date']
+            bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
+
+        # Показываем сообщение об успехе и сразу обновленный календарь
         await callback.message.edit_text(
             f"✅ Вы записаны на {format_date_long(booking_date)}!\n"
-            f"Вы {current_count + 1}-й дежурный на этот день.",
-            reply_markup=kb.get_back_keyboard()
+            f"Вы {current_count + 1}-й дежурный на этот день.\n\n"
+            f"📅 Обновленный календарь:",
+            reply_markup=kb.get_calendar_keyboard(
+                today.year,
+                today.month,
+                bookings_count
+            )
         )
-
-        # Нужно обновить календарь, но мы уже ушли с экрана календаря
-        # Пользователь сам вернется в календарь по кнопке "Назад"
     else:
+        # Если ошибка - тоже показываем календарь
+        today = date.today()
+        month_bookings = await database.get_month_bookings(today.year, today.month)
+        bookings_count = {}
+        for booking in month_bookings:
+            if isinstance(booking, (tuple, list)):
+                date_str = booking[0]
+            elif isinstance(booking, str):
+                date_str = booking
+            else:
+                date_str = booking['booking_date']
+            bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
+
         await callback.message.edit_text(
-            f"❌ Не удалось записаться: {message}",
-            reply_markup=kb.get_back_keyboard()
+            f"❌ Не удалось записаться: {message}\n\n"
+            f"📅 Актуальный календарь:",
+            reply_markup=kb.get_calendar_keyboard(
+                today.year,
+                today.month,
+                bookings_count
+            )
         )
 
     await callback.answer()
