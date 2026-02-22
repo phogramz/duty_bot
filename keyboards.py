@@ -124,3 +124,14 @@ def get_back_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"), width=1)
     return builder.as_markup()
+
+
+def get_booking_confirmation_keyboard(date_str: str) -> InlineKeyboardMarkup:
+    """Подтверждение бронирования"""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"confirm_{date_str}"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="back_to_calendar"),
+        width=2
+    )
+    return builder.as_markup()
