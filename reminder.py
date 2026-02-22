@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 # Конфигурация
 DATABASE_PATH = 'duty_bot.db'  # путь к базе данных
 TIMEZONE = timezone('Europe/Moscow')
-MORNING_HOUR = 3  # 9 утра
+MORNING_HOUR = 9  # 9 утра
 
 
 async def send_reminder(bot, telegram_id: int, text: str):
