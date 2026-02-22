@@ -135,3 +135,22 @@ def get_booking_confirmation_keyboard(date_str: str) -> InlineKeyboardMarkup:
         width=2
     )
     return builder.as_markup()
+
+
+def get_cancel_selection_keyboard(bookings: list) -> InlineKeyboardMarkup:
+    """Клавиатура для выбора брони для отмены"""
+    builder = InlineKeyboardBuilder()
+
+    for booking in bookings:
+        date_obj = datetime.strptime(booking['booking_date'], '%Y-%m-%d').date()
+        btn_text = format_date_short(date_obj)
+        builder.row(
+            InlineKeyboardButton(
+                text=f"❌ {btn_text}",
+                callback_data=f"cancel_{booking['id']}"
+            ),
+            width=1
+        )
+
+    builder.row(InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"), width=1)
+    return builder.as_markup()
