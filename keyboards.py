@@ -18,19 +18,20 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="❌ Отменить", callback_data="cancel_menu"),
         width=2
     )
-    return builder.as_markup() #👤 👥
+    return builder.as_markup() # 👤 👥 🟩 🟨 🟥
 
 
 def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> InlineKeyboardMarkup:
-    """Календарь - только ср, сб, вс, с отдельной строкой дней недели"""
+    """Календарь с пустыми ячейками для других дней, но заголовки только для ср,сб,вс"""
     builder = InlineKeyboardBuilder()
     allowed_weekdays = [2, 5, 6]  # ср, сб, вс
+    weekday_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
     # Эмодзи для количества человек
     people_emoji = {
-        0: "⬜",  # пустой квадрат (0 человек)
-        1: "🟨",  # желтый (1 человек)
-        2: "🟥"  # красный (занято)
+        0: "🟩",
+        1: "🟨",
+        2: "🟥"
     }
 
     if bookings_data is None:
@@ -50,52 +51,72 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
         width=3
     )
 
-    # Строка с названиями дней недели (только для доступных дней)
-    weekday_names = {2: "Ср", 5: "Сб", 6: "Вс"}
-    day_headers = []
-    for weekday in [2, 5, 6]:  # ср, сб, вс по порядку
-        day_headers.append(InlineKeyboardButton(text=weekday_names[weekday], callback_data="ignore"))
-    builder.row(*day_headers, width=3)
+    # Заголовки дней недели - ТОЛЬКО для ср, сб, вс
+    builder.row(
+        InlineKeyboardButton(text="Ср", callback_data="ignore"),
+        InlineKeyboardButton(text="Сб", callback_data="ignore"),
+        InlineKeyboardButton(text="Вс", callback_data="ignore"),
+        width=3
+    )
 
-    # Получаем все доступные дни месяца
-    available_days = []
+    # Определяем первый день месяца
+    first_day = date(year, month, 1)
+    start_weekday = first_day.weekday()  # 0=пн, 1=вт, 2=ср, 3=чт, 4=пт, 5=сб, 6=вс
+
+    # Определяем последний день месяца
     if month == 12:
         last_day = 31
     else:
         last_day = (date(year, month + 1, 1) - timedelta(days=1)).day
 
-    # Собираем информацию о доступных днях с сортировкой по дате
-    days_info = []
-    for day in range(1, last_day + 1):
-        current_date = date(year, month, day)
-        if current_date.weekday() in allowed_weekdays:
-            days_info.append({
-                'day': day,
-                'weekday': current_date.weekday(),
-                'date': current_date,
-                'date_str': current_date.isoformat()
-            })
+    # Создаем сетку 7x(кол-во недель) для всех дней
+    all_days = []
+    current_date = first_day
+    while current_date.month == month:
+        all_days.append({
+            'day': current_date.day,
+            'weekday': current_date.weekday(),
+            'date': current_date,
+            'date_str': current_date.isoformat()
+        })
+        current_date += timedelta(days=1)
 
-    # Группируем по 3 в ряд
-    for i in range(0, len(days_info), 3):
-        row_days = days_info[i:i + 3]
+    # Добавляем пустые дни в начало, если месяц начинается не с понедельника
+    days_grid = []
+    # Добавляем пустые дни до первого дня месяца
+    for _ in range(start_weekday):
+        days_grid.append(None)  # None означает пустую ячейку
+
+    # Добавляем все дни месяца
+    days_grid.extend(all_days)
+
+    # Добавляем пустые дни в конец, чтобы получить полные недели
+    while len(days_grid) % 7 != 0:
+        days_grid.append(None)
+
+    # Разбиваем на недели по 7 дней
+    weeks = [days_grid[i:i + 7] for i in range(0, len(days_grid), 7)]
+
+    # Для каждой недели создаем ряд с ТОЛЬКО доступными днями (ср, сб, вс)
+    for week in weeks:
         row_buttons = []
 
-        for day_info in row_days:
-            count = bookings_data.get(day_info['date_str'], 0)
+        # Проходим по каждому дню недели (пн-вс)
+        for day_idx, day_info in enumerate(week):
+            # Проверяем, является ли этот день доступным (ср, сб, вс)
+            if day_info and day_info['weekday'] in allowed_weekdays:
+                count = bookings_data.get(day_info['date_str'], 0)
 
-            # Формат: число | количество/2 + эмодзи
-            # Пример: 05 | 0/2 ⬜
-            btn_text = f"{day_info['day']:02d} | {count}/2 {people_emoji[count]}"
-            callback = f"select_{year}_{month}_{day_info['day']}" if count < 2 else "ignore"
+                # Формат: число | количество/2 + эмодзи
+                btn_text = f"{day_info['day']:02d} | {count}/2 {people_emoji[count]}"
+                callback = f"select_{year}_{month}_{day_info['day']}" if count < 2 else "ignore"
+                row_buttons.append(InlineKeyboardButton(text=btn_text, callback_data=callback))
+            else:
+                # Для всех остальных дней (включая пустые) - пустая кнопка
+                row_buttons.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
 
-            row_buttons.append(InlineKeyboardButton(text=btn_text, callback_data=callback))
-
-        # Добавляем пустые кнопки, если в ряду меньше 3 дней
-        while len(row_buttons) < 3:
-            row_buttons.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
-
-        builder.row(*row_buttons, width=3)
+        # Добавляем ряд с 7 кнопками (но визуально видны только ср,сб,вс)
+        builder.row(*row_buttons, width=7)
 
     builder.row(InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"), width=1)
     return builder.as_markup()
