@@ -14,6 +14,14 @@ import database
 import keyboards as kb
 from utils import format_date_long, format_date_short, get_month_name
 
+import gc
+gc.set_threshold(100, 5, 5)
+gc.enable()
+
+import logging
+logging.getLogger('apscheduler').setLevel(logging.WARNING)
+logging.getLogger('aiogram').setLevel(logging.INFO)
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
