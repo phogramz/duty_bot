@@ -223,7 +223,7 @@ async def process_cancel_menu(callback: CallbackQuery):
 
     await callback.message.edit_text(
         "❌ Выберите дежурство для отмены:",
-        reply_markup=await kb.get_cancel_selection_keyboard(bookings)  # ДОБАВЬ AWAIT
+        reply_markup=kb.get_cancel_selection_keyboard(bookings)  # ДОБАВЬ AWAIT
     )
     await callback.answer()
 
