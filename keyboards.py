@@ -34,7 +34,6 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
     days_ru = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
     allowed_weekdays = [2, 5, 6]  # ср, сб, вс
 
-    # Если данные не переданы - создаем пустой словарь
     if bookings_data is None:
         bookings_data = {}
 
@@ -78,15 +77,18 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
         date_str = current_date.isoformat()
 
         if current_date.weekday() in allowed_weekdays:
-            # Получаем количество броней из переданных данных
             count = bookings_data.get(date_str, 0)
 
-            if count < 2:  # 0 или 1 человек
-                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}"
-                callback = f"select_{year}_{month}_{day}"
-            else:  # уже 2 человека
-                btn_text = f"❌{day:02d}"
-                callback = "ignore"
+            # Формируем текст с количеством
+            if count == 0:
+                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}\n0/2"
+            elif count == 1:
+                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}\n1/2"
+            else:  # count == 2
+                btn_text = f"{day:02d}{days_ru[current_date.weekday()]}\n2/2"
+
+            # Доступно для бронирования, если меньше 2
+            callback = f"select_{year}_{month}_{day}" if count < 2 else "ignore"
         else:
             btn_text = "❌"
             callback = "ignore"

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 # Конфигурация
 DATABASE_PATH = 'duty_bot.db'  # путь к базе данных
 TIMEZONE = timezone('Europe/Moscow')
-MORNING_HOUR = 9  # 9 утра
+MORNING_HOUR = 6  # 6:00 UDC, 9:00 MSK
 
 
 async def send_reminder(bot, telegram_id: int, text: str):
@@ -125,7 +125,7 @@ def setup_reminders(bot):
     # Проверка за 3 дня - тоже в 9:00
     scheduler.add_job(
         check_three_days_duty,
-        CronTrigger(hour=MORNING_HOUR, minute=5),  # на 5 минут позже, чтобы не пересекались
+        CronTrigger(hour=MORNING_HOUR, minute=30),  # на 30 минут позже, чтобы не пересекались
         args=[bot],
         id='three_days_reminder',
         replace_existing=True
