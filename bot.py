@@ -87,7 +87,7 @@ async def process_calendar_nav(callback: CallbackQuery):
     """Переключение между месяцами"""
     _, year, month = callback.data.split('_')
     await callback.message.edit_reply_markup(
-        reply_markup=await kb.get_calendar_keyboard(int(year), int(month))  # добавили await
+        reply_markup=kb.get_calendar_keyboard(int(year), int(month))  # добавили await
     )
     await callback.answer()
 
@@ -319,7 +319,7 @@ async def process_back_to_calendar(callback: CallbackQuery):
     today = date.today()
     await callback.message.edit_text(
         "📅 Выберите день для дежурства:",
-        reply_markup=await kb.get_calendar_keyboard(today.year, today.month)
+        reply_markup=kb.get_calendar_keyboard(today.year, today.month)
     )
     await callback.answer()
 
