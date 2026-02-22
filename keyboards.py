@@ -22,14 +22,7 @@ def get_main_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> InlineKeyboardMarkup:
-    """Календарь на указанный месяц (СИНХРОННЫЙ)
-
-    Args:
-        year: год
-        month: месяц
-        bookings_data: словарь {дата: количество_броней}
-                      например {'2024-03-04': 1, '2024-03-08': 2}
-    """
+    """Календарь - показываем ТОЛЬКО доступные дни (ср, сб, вс)"""
     builder = InlineKeyboardBuilder()
     allowed_weekdays = [2, 5, 6]  # ср, сб, вс
 
@@ -50,22 +43,8 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
         width=3
     )
 
-    # Заголовки дней недели (короткие)
-    builder.row(
-        *[InlineKeyboardButton(text=d, callback_data="ignore") for d in ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']],
-        width=7
-    )
-
-    # Определяем первый день месяца
-    first_day = date(year, month, 1)
-    start_weekday = first_day.weekday()
-
-    # Пустые ячейки перед первым днем
-    week = []
-    for _ in range(start_weekday):
-        week.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
-
-    # Заполняем дни месяца
+    # Получаем все доступные дни месяца
+    available_days = []
     if month == 12:
         last_day = 31
     else:
@@ -73,38 +52,33 @@ def get_calendar_keyboard(year: int, month: int, bookings_data: dict = None) -> 
 
     for day in range(1, last_day + 1):
         current_date = date(year, month, day)
-        date_str = current_date.isoformat()
-
         if current_date.weekday() in allowed_weekdays:
+            available_days.append(day)
+
+    # Группируем доступные дни по 3 в ряд
+    for i in range(0, len(available_days), 3):
+        row_days = available_days[i:i + 3]
+        row_buttons = []
+
+        for day in row_days:
+            current_date = date(year, month, day)
+            date_str = current_date.isoformat()
             count = bookings_data.get(date_str, 0)
 
-            # ОЧЕНЬ КОРОТКИЙ формат: просто число и эмодзи
+            # Формируем текст: число и количество
             if count == 0:
-                btn_text = f"{day}\n⬜"  # белый квадрат
+                btn_text = f"{day:02d} (0/2)"
             elif count == 1:
-                btn_text = f"{day}\n🟨"  # желтый (1 человек)
+                btn_text = f"{day:02d} (1/2)"
             else:
-                btn_text = f"{day}\n🟥"  # красный (занято)
+                btn_text = f"{day:02d} (2/2)"
 
             callback = f"select_{year}_{month}_{day}" if count < 2 else "ignore"
-        else:
-            # Для недоступных дней - просто точка или пробел
-            btn_text = "❌"
-            callback = "ignore"
+            row_buttons.append(InlineKeyboardButton(text=btn_text, callback_data=callback))
 
-        week.append(InlineKeyboardButton(text=btn_text, callback_data=callback))
-
-        if len(week) == 7:
-            builder.row(*week, width=7)
-            week = []
-
-    if week:
-        while len(week) < 7:
-            week.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
-        builder.row(*week, width=7)
+        builder.row(*row_buttons, width=len(row_days))
 
     builder.row(InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"), width=1)
-
     return builder.as_markup()
 
 
