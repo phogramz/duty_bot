@@ -334,7 +334,7 @@ async def process_ignore(callback: CallbackQuery):
 # Запуск бота
 async def main():
     await database.init_db()
-    # Настраиваем и запускаем планировщик уведомлений
+    # Настраиваем и запускаем планировщик уведомлений (1)
     scheduler = setup_reminders(bot)
     # Запускаем бота
     await dp.start_polling(bot)
