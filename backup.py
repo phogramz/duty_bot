@@ -55,23 +55,31 @@ async def create_backup():
 
 async def send_backup_to_admin(file_path: Path, filename: str):
     """Отправляет файл бэкапа администратору"""
+    from aiogram import Bot
     bot = Bot(token=config.BOT_TOKEN)
 
     try:
-        # Открываем файл и отправляем
+        # Проверим, что файл существует
+        if not file_path.exists():
+            logger.error(f"Файл {file_path} не найден")
+            return False
+
+        # Отправляем файл
         with open(file_path, 'rb') as f:
             await bot.send_document(
                 chat_id=ADMIN_ID,
                 document=f,
                 caption=f"📦 **Автоматический бэкап**\n"
                         f"📅 Дата: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
-                        f"📁 Файл: {filename}"
+                        f"📁 Размер: {file_path.stat().st_size / 1024:.1f} KB"
             )
 
-        logger.info(f"✅ Бэкап отправлен админу")
+        logger.info(f"✅ Бэкап отправлен админу {ADMIN_ID}")
+        return True
 
     except Exception as e:
         logger.error(f"❌ Ошибка отправки бэкапа: {e}")
+        return False
 
     finally:
         await bot.session.close()
