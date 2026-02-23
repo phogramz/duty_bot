@@ -465,12 +465,30 @@ async def process_back_to_menu(callback: CallbackQuery):
 
 
 @dp.callback_query(F.data == "back_to_calendar")
+@auth_required
 async def process_back_to_calendar(callback: CallbackQuery):
-    """Возврат к календарю"""
+    """Возврат к календарю с обновлением данных"""
     today = date.today()
+
+    # ЗАГРУЖАЕМ СВЕЖИЕ данные о бронях
+    month_bookings = await database.get_month_bookings(today.year, today.month)
+    bookings_count = {}
+    for booking in month_bookings:
+        if isinstance(booking, (tuple, list)):
+            date_str = booking[0]
+        elif isinstance(booking, str):
+            date_str = booking
+        else:
+            date_str = booking['booking_date']
+        bookings_count[date_str] = bookings_count.get(date_str, 0) + 1
+
     await callback.message.edit_text(
         "📅 Выберите день для дежурства:",
-        reply_markup=kb.get_calendar_keyboard(today.year, today.month)
+        reply_markup=kb.get_calendar_keyboard(
+            today.year,
+            today.month,
+            bookings_count  # передаем актуальные данные
+        )
     )
     await callback.answer()
 
