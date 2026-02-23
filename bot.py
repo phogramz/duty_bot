@@ -130,6 +130,7 @@ async def process_book(callback: CallbackQuery):
 
 # Обработка навигации по календарю
 @dp.callback_query(F.data.startswith("cal_"))
+@auth_required
 async def process_calendar_nav(callback: CallbackQuery):
     """Переключение между месяцами"""
     _, year, month = callback.data.split('_')
@@ -155,6 +156,7 @@ async def process_calendar_nav(callback: CallbackQuery):
 
 # Обработка выбора даты
 @dp.callback_query(F.data.startswith("select_"))
+@auth_required
 async def process_date_select(callback: CallbackQuery):
     """Пользователь выбрал дату в календаре"""
     _, year, month, day = callback.data.split('_')
@@ -191,7 +193,6 @@ async def process_date_select(callback: CallbackQuery):
 
 # Обработка подтверждения брони
 @dp.callback_query(F.data.startswith("confirm_"))
-@auth_required
 async def process_confirm(callback: CallbackQuery):
     """Подтверждение бронирования с автоматическим обновлением календаря"""
     date_str = callback.data.replace("confirm_", "")
@@ -296,32 +297,47 @@ async def process_confirm(callback: CallbackQuery):
 @dp.callback_query(F.data == "my_bookings")
 @auth_required
 async def process_my_bookings(callback: CallbackQuery):
-    """Показывает список броней пользователя"""
-    bookings = await database.get_user_bookings(callback.from_user.id)
+    """Показывает ТОЛЬКО будущие брони пользователя"""
+    # Используем новую функцию с фильтром
+    bookings = await database.get_user_bookings_filtered(callback.from_user.id)
 
     if not bookings:
         await callback.message.edit_text(
-            "📭 У вас пока нет забронированных дежурств.\n"
+            "📭 У вас нет предстоящих дежурств.\n"
             "Нажмите «Забронировать», чтобы выбрать день.",
             reply_markup=kb.get_back_keyboard()
         )
         await callback.answer()
         return
 
+    # ... остальной код форматирования как выше ...
+
+    # Словарь месяцев
+    month_names = {
+        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
+        5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
+        9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+    }
+    weekday_names = ['понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу', 'воскресенье']
+
     # Группируем брони по месяцам
     bookings_by_month = {}
     for booking in bookings:
         date_obj = datetime.strptime(booking['booking_date'], '%Y-%m-%d').date()
-        month_key = f"{get_month_name(date_obj.month)} {date_obj.year}"
+        month_key = f"{month_names[date_obj.month]} {date_obj.year}"
+
         if month_key not in bookings_by_month:
             bookings_by_month[month_key] = []
-        bookings_by_month[month_key].append(format_date_short(date_obj))
+
+        # Формат: "18 среда"
+        date_str = f"{date_obj.day} {weekday_names[date_obj.weekday()]}"
+        bookings_by_month[month_key].append(date_str)
 
     # Формируем сообщение
     text = "📋 **Ваши дежурства:**\n\n"
     for month, dates in bookings_by_month.items():
         text += f"**{month}:**\n"
-        text += ", ".join(dates) + "\n\n"
+        text += "\n".join(f"• {date}" for date in dates) + "\n\n"
 
     await callback.message.edit_text(
         text,
@@ -334,12 +350,13 @@ async def process_my_bookings(callback: CallbackQuery):
 # Обработка кнопки "Отменить"
 @dp.callback_query(F.data == "cancel_menu")
 async def process_cancel_menu(callback: CallbackQuery):
-    """Показывает список броней для отмены"""
-    bookings = await database.get_user_bookings(callback.from_user.id)
+    """Показывает ТОЛЬКО будущие брони для отмены"""
+    # Используем новую функцию с фильтром
+    bookings = await database.get_user_bookings_filtered(callback.from_user.id)
 
     if not bookings:
         await callback.message.edit_text(
-            "📭 У вас нет броней для отмены.",
+            "📭 У вас нет предстоящих дежурств для отмены.",
             reply_markup=kb.get_back_keyboard()
         )
         await callback.answer()
@@ -347,7 +364,7 @@ async def process_cancel_menu(callback: CallbackQuery):
 
     await callback.message.edit_text(
         "❌ Выберите дежурство для отмены:",
-        reply_markup=kb.get_cancel_selection_keyboard(bookings)  # ДОБАВЬ AWAIT
+        reply_markup=kb.get_cancel_selection_keyboard(bookings)
     )
     await callback.answer()
 
@@ -377,12 +394,13 @@ async def process_cancel_booking(callback: CallbackQuery):
 @dp.callback_query(F.data == "all_bookings")
 @auth_required
 async def process_all_bookings(callback: CallbackQuery):
-    """Показывает календарь со всеми дежурствами"""
-    all_bookings = await database.get_all_bookings()
+    """Показывает ТОЛЬКО будущие дежурства всех пользователей"""
+    # Используем новую функцию с фильтром
+    all_bookings = await database.get_all_future_bookings()
 
     if not all_bookings:
         await callback.message.edit_text(
-            "📭 Пока нет ни одного дежурства.\n"
+            "📭 Нет предстоящих дежурств.\n"
             "Будьте первым! Нажмите «Забронировать».",
             reply_markup=kb.get_back_keyboard()
         )
@@ -401,20 +419,28 @@ async def process_all_bookings(callback: CallbackQuery):
             }
         bookings_by_date[date_key]['names'].append(booking['full_name'])
 
+    # Словарь для названий месяцев
+    month_names = {
+        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
+        5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
+        9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+    }
+    weekday_names = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
+
     # Группируем по месяцам для вывода
     bookings_by_month = {}
     for date_key, data in bookings_by_date.items():
-        month_key = f"{get_month_name(data['date'].month)} {data['date'].year}"
+        month_key = f"{month_names[data['date'].month]} {data['date'].year}"
         if month_key not in bookings_by_month:
             bookings_by_month[month_key] = []
 
-        # Формируем строку: "04ср — Имя1 и Имя2"
-        date_str = format_date_short(data['date'])
+        # Формат: "18 ср — Имя1 и Имя2"
+        date_str = f"{data['date'].day:02d} {weekday_names[data['date'].weekday()]}"
         names_str = " и ".join(data['names'])
         bookings_by_month[month_key].append(f"{date_str} — {names_str}")
 
     # Формируем сообщение
-    text = "👥 **Все дежурства:**\n\n"
+    text = "👥 **Предстоящие дежурства:**\n\n"
     for month, entries in bookings_by_month.items():
         text += f"**{month}:**\n"
         text += "\n".join(entries) + "\n\n"

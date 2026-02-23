@@ -138,12 +138,30 @@ def get_booking_confirmation_keyboard(date_str: str) -> InlineKeyboardMarkup:
 
 
 def get_cancel_selection_keyboard(bookings: list) -> InlineKeyboardMarkup:
-    """Клавиатура для выбора брони для отмены"""
+    """Клавиатура для выбора брони для отмены с месяцем"""
     builder = InlineKeyboardBuilder()
 
+    # Словарь для сокращенных названий месяцев
+    month_names = {
+        1: "Янв", 2: "Фев", 3: "Мар", 4: "Апр",
+        5: "Май", 6: "Июн", 7: "Июл", 8: "Авг",
+        9: "Сен", 10: "Окт", 11: "Ноя", 12: "Дек"
+    }
+
+    # Дни недели
+    weekday_names = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
+
     for booking in bookings:
+        # Получаем дату из строки
         date_obj = datetime.strptime(booking['booking_date'], '%Y-%m-%d').date()
-        btn_text = format_date_short(date_obj)
+
+        # Формат: "Фев 18 ср"
+        month_short = month_names[date_obj.month]
+        day = date_obj.day
+        weekday_short = weekday_names[date_obj.weekday()]
+
+        btn_text = f"{month_short} {day:02d} {weekday_short}"
+
         builder.row(
             InlineKeyboardButton(
                 text=f"❌ {btn_text}",
@@ -152,5 +170,10 @@ def get_cancel_selection_keyboard(bookings: list) -> InlineKeyboardMarkup:
             width=1
         )
 
-    builder.row(InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"), width=1)
+    # Добавляем кнопку "Назад"
+    builder.row(
+        InlineKeyboardButton(text="« Назад", callback_data="back_to_menu"),
+        width=1
+    )
+
     return builder.as_markup()

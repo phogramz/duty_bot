@@ -157,3 +157,35 @@ async def get_month_bookings(year: int, month: int):
         ''', (start_date.isoformat(), end_date.isoformat())) as cursor:
             rows = await cursor.fetchall()
             return [row[0] for row in rows]  # возвращаем список дат
+
+
+async def get_user_bookings_filtered(telegram_id: int):
+    """Получает все будущие брони пользователя"""
+    today = date.today().isoformat()
+
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT b.*, u.full_name 
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            WHERE u.telegram_id = ? AND b.booking_date >= ?
+            ORDER BY b.booking_date
+        ''', (telegram_id, today)) as cursor:
+            return await cursor.fetchall()
+
+
+async def get_all_future_bookings():
+    """Получает все будущие брони для общего календаря"""
+    today = date.today().isoformat()
+
+    async with aiosqlite.connect(config.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute('''
+            SELECT b.booking_date, u.full_name
+            FROM bookings b
+            JOIN users u ON b.user_id = u.id
+            WHERE b.booking_date >= ?
+            ORDER BY b.booking_date
+        ''', (today,)) as cursor:
+            return await cursor.fetchall()
