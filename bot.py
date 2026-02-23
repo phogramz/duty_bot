@@ -13,6 +13,7 @@ import config
 import database
 import keyboards as kb
 from utils import format_date_long, format_date_short, get_month_name
+from auth import is_authorized, request_auth, check_auth_code, AuthStates
 
 import gc
 gc.set_threshold(100, 5, 5)
