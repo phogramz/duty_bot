@@ -13,6 +13,7 @@ from functools import wraps
 import config
 import database
 import keyboards as kb
+import backup
 from utils import format_date_long, format_date_short, get_month_name
 from auth import is_authorized, request_auth, check_auth_code, AuthStates
 
@@ -498,6 +499,27 @@ async def process_back_to_calendar(callback: CallbackQuery):
 async def process_ignore(callback: CallbackQuery):
     """Игнорирует нажатия на неактивные кнопки"""
     await callback.answer()
+
+
+@dp.message(Command("backup"))
+@auth_required
+async def cmd_backup(message: types.Message):
+    """Ручной запуск бэкапа (только для админа)"""
+    # Проверяем, что это админ
+    if message.from_user.id != backup.ADMIN_ID:
+        await message.answer("❌ У вас нет прав для этой команды")
+        return
+
+    await message.answer("🔄 Создаю бэкап...")
+
+    # Запускаем бэкап
+    from backup import create_backup
+    success = await create_backup()
+
+    if success:
+        await message.answer("✅ Бэкап создан и отправлен")
+    else:
+        await message.answer("❌ Ошибка создания бэкапа")
 
 
 # Запуск бота
