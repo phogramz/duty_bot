@@ -8,6 +8,7 @@ from aiogram.enums.parse_mode import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from reminder import setup_reminders
+from functools import wraps
 
 import config
 import database
@@ -30,6 +31,34 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
 
+from functools import wraps
+
+
+def auth_required(handler):
+    """Декоратор для проверки авторизации в callback-обработчиках"""
+
+    @wraps(handler)
+    async def wrapper(callback: types.CallbackQuery, *args, **kwargs):
+        # Проверка авторизации
+        if not await is_authorized(callback.from_user.id):
+            await callback.answer("🔐 Требуется авторизация", show_alert=True)
+            # Получаем state из kwargs (aiogram передает его в обработчики)
+            state = kwargs.get('state')
+            if state:
+                await request_auth(callback.message, state)
+            return
+
+        # Если авторизован, вызываем исходный обработчик
+        return await handler(callback, *args, **kwargs)
+
+    return wrapper
+
+
+@dp.message(AuthStates.waiting_for_code)
+async def handle_auth_code(message: types.Message, state: FSMContext):
+    """Обрабатывает ввод кода доступа"""
+    await check_auth_code(message, state)
+
 
 # Состояния для FSM (Finite State Machine)
 class BookingStates(StatesGroup):
@@ -39,26 +68,33 @@ class BookingStates(StatesGroup):
 
 # Команда /start
 @dp.message(Command("start"))
-async def cmd_start(message: Message):
-    """Приветственное сообщение и регистрация пользователя"""
-    await database.add_user(
-        telegram_id=message.from_user.id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name
-    )
+async def cmd_start(message: types.Message, state: FSMContext):
+    """Стартовая команда"""
+    user_id = message.from_user.id
 
-    await message.answer(
-        f"👋 Привет, {message.from_user.full_name}!\n\n"
-        f"Это бот для бронирования дежурств по уборке.\n"
-        f"Доступные дни: среда, суббота, воскресенье.\n\n"
-        f"Выбери действие:",
-        reply_markup=kb.get_main_keyboard(),
-        parse_mode=ParseMode.HTML
-    )
+    if await is_authorized(user_id):
+        # Уже авторизован - показываем меню
+        await database.add_user(
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name
+        )
+
+        await message.answer(
+            f"👋 Привет, {message.from_user.full_name}!\n\n"
+            f"Это бот для бронирования дежурств по уборке.\n"
+            f"Доступные дни: среда, суббота, воскресенье.\n\n"
+            f"Выбери действие:",
+            reply_markup=kb.get_main_keyboard()
+        )
+    else:
+        # Не авторизован - запрашиваем код
+        await request_auth(message, state)
 
 
 # Обработка кнопки "Забронировать"
 @dp.callback_query(F.data == "book")
+@auth_required
 async def process_book(callback: CallbackQuery):
     """Показывает календарь на текущий месяц"""
     today = date.today()
@@ -155,6 +191,7 @@ async def process_date_select(callback: CallbackQuery):
 
 # Обработка подтверждения брони
 @dp.callback_query(F.data.startswith("confirm_"))
+@auth_required
 async def process_confirm(callback: CallbackQuery):
     """Подтверждение бронирования с автоматическим обновлением календаря"""
     date_str = callback.data.replace("confirm_", "")
@@ -257,6 +294,7 @@ async def process_confirm(callback: CallbackQuery):
 
 # Обработка кнопки "Мои брони"
 @dp.callback_query(F.data == "my_bookings")
+@auth_required
 async def process_my_bookings(callback: CallbackQuery):
     """Показывает список броней пользователя"""
     bookings = await database.get_user_bookings(callback.from_user.id)
@@ -337,6 +375,7 @@ async def process_cancel_booking(callback: CallbackQuery):
 
 # Обработка кнопки "Все дежурства"
 @dp.callback_query(F.data == "all_bookings")
+@auth_required
 async def process_all_bookings(callback: CallbackQuery):
     """Показывает календарь со всеми дежурствами"""
     all_bookings = await database.get_all_bookings()
