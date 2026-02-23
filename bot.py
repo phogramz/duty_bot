@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from datetime import datetime, date
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -31,8 +30,6 @@ logging.basicConfig(level=logging.INFO)
 # Создаем бота и диспетчер
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
-
-from functools import wraps
 
 
 def auth_required(handler):

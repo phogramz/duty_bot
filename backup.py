@@ -5,7 +5,7 @@ import datetime
 import asyncio
 import logging
 from pathlib import Path
-from aiogram import Bot
+from aiogram.types import FSInputFile
 import config
 
 # Настройка логирования
@@ -54,25 +54,30 @@ async def create_backup():
 
 
 async def send_backup_to_admin(file_path: Path, filename: str):
-    """Отправляет файл бэкапа администратору"""
+    """Отправляет файл бэкапа администратору (для aiogram 3.x)"""
     from aiogram import Bot
     bot = Bot(token=config.BOT_TOKEN)
 
     try:
-        # Проверим, что файл существует
+        # Проверяем, что файл существует
         if not file_path.exists():
-            logger.error(f"Файл {file_path} не найден")
+            logger.error(f"❌ Файл {file_path} не найден")
             return False
 
+        # Для aiogram 3.x нужно использовать FSInputFile
+        document = FSInputFile(
+            path=str(file_path),
+            filename=filename
+        )
+
         # Отправляем файл
-        with open(file_path, 'rb') as f:
-            await bot.send_document(
-                chat_id=ADMIN_ID,
-                document=f,
-                caption=f"📦 **Автоматический бэкап**\n"
-                        f"📅 Дата: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
-                        f"📁 Размер: {file_path.stat().st_size / 1024:.1f} KB"
-            )
+        await bot.send_document(
+            chat_id=ADMIN_ID,
+            document=document,
+            caption=f"📦 **Автоматический бэкап**\n"
+                    f"📅 Дата: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
+                    f"📁 Размер: {file_path.stat().st_size / 1024:.1f} KB"
+        )
 
         logger.info(f"✅ Бэкап отправлен админу {ADMIN_ID}")
         return True
