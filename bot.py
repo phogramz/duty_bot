@@ -41,7 +41,7 @@ def auth_required(handler):
     async def wrapper(callback: types.CallbackQuery, *args, **kwargs):
         # Проверка авторизации
         if not await is_authorized(callback.from_user.id):
-            await callback.answer("🔐 Требуется авторизация", show_alert=True)
+            await callback.answer("🔐 Требуется авторизация\n[ 🚀 Вход: ☰ Меню -> /start ]", show_alert=True)
             # Получаем state из kwargs (aiogram передает его в обработчики)
             state = kwargs.get('state')
             if state:
